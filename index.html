@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>College Club Platform</title>
+<style>
+:root{--b:#2d5be3;--bg:#f4f6fb;--c:#fff;--t:#1d2433;--m:#6b7385;--l:#e3e7f0}
+@media(prefers-color-scheme:dark){:root{--bg:#12151c;--c:#1b2029;--t:#e8ebf2;--m:#98a1b3;--l:#2a3140}}
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--t)}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--c);border-bottom:1px solid var(--l)}
+nav{display:flex;gap:4px;padding:10px 20px 0;flex-wrap:wrap}nav button{border:0;background:none;padding:9px 14px;border-radius:8px 8px 0 0;color:var(--m);cursor:pointer;font:inherit}
+nav button.on{background:var(--c);color:var(--b);font-weight:600}
+main{margin:0 20px 20px;background:var(--c);border-radius:0 8px 8px 8px;padding:16px;min-height:60vh}
+button{font:inherit;cursor:pointer}.tb{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.tb button,dialog button{padding:7px 14px;border:1px solid var(--l);border-radius:6px;background:var(--c);color:var(--t)}
+.p{background:var(--b)!important;color:#fff!important;border-color:var(--b)!important}
+table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--l)}th{color:var(--m);font-weight:600;font-size:12px;text-transform:uppercase}
+tbody tr{cursor:pointer}tbody tr:hover{background:var(--bg)}tr.sel{background:color-mix(in srgb,var(--b) 15%,transparent)!important}
+.badge{padding:2px 8px;border-radius:10px;font-size:12px;background:var(--l)}.APPROVED,.PRESENT{background:#d6f5e0;color:#146c2e}.REJECTED,.ABSENT{background:#fde0e0;color:#a11}.PENDING{background:#fff1cc;color:#8a6100}
+.card{max-width:340px;margin:12vh auto;background:var(--c);padding:28px;border-radius:12px;box-shadow:0 4px 24px #0002}
+input,select{width:100%;padding:8px;margin:4px 0 12px;border:1px solid var(--l);border-radius:6px;background:var(--bg);color:var(--t);font:inherit}
+dialog{border:0;border-radius:12px;padding:22px;min-width:340px;background:var(--c);color:var(--t)}dialog::backdrop{background:#0006}
+.r{display:flex;gap:8px;justify-content:flex-end}h3{margin-top:0}.live{color:var(--m);font-size:12px;margin-left:auto}
+</style></head><body>
+<div id="login" class="card" hidden><h2>🎓 Club Platform</h2>
+<label>Email<input id="em" value="admin@college.edu"></label><label>Password<input id="pw" type="password"></label>
+<div class="r"><button onclick="reg()">Register</button><button class="p" onclick="login()">Login</button></div></div>
+<div id="app" hidden><header><b>🎓 College Club Platform</b><span><span id="who"></span> <button onclick="logout()">Logout</button></span></header>
+<nav id="nav"></nav><main><div class="tb" id="tb"></div><div id="tbl"></div></main></div><dialog id="dlg"></dialog>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let me=null,cur=null,selId=null;
+async function api(a,d={}){const r=await fetch('api.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({a,...d})});const j=await r.json();if(j.error)throw new Error(j.error);return j}
+const run=f=>async(...x)=>{try{await f(...x)}catch(e){alert(e.message)}};
+function form(title,fs){return new Promise(res=>{const d=$('#dlg');d.innerHTML=`<form method="dialog"><h3>${title}</h3>${fs.map(([k,l,t='text',o])=>`<label>${l}${t=='select'?`<select name="${k}">${o.map(x=>`<option>${x}</option>`).join('')}</select>`:`<input name="${k}" type="${t}" required>`}</label>`).join('')}<div class="r"><button value="x" formnovalidate>Cancel</button><button value="ok" class="p">OK</button></div></form>`;d.onclose=()=>res(d.returnValue=='ok'?Object.fromEntries(new FormData(d.querySelector('form'))):null);d.showModal()})}
+const A=(l,roles,sel,fn)=>({l,roles,sel,fn}),ST=(t,s)=>id=>api('status',{t,id,s});
+const T=[
+{id:'clubs',n:'Clubs',roles:'*',b:[A('Join Club','STUDENT',1,id=>api('join',{id}).then(()=>alert('Join request sent'))),
+ A('Create Club','CLUB_HEAD',0,async()=>{const v=await form('New Club',[['name','Name'],['description','Description']]);v&&await api('createClub',v)}),
+ A('Approve','FACULTY,ADMIN',1,ST('clubs','APPROVED')),A('Reject','FACULTY,ADMIN',1,ST('clubs','REJECTED'))]},
+{id:'members',n:'Memberships',roles:'*',b:[A('Approve','CLUB_HEAD,ADMIN',1,ST('memberships','APPROVED')),A('Reject','CLUB_HEAD,ADMIN',1,ST('memberships','REJECTED'))]},
+{id:'events',n:'Events',roles:'*',b:[A('Register','STUDENT',1,id=>api('regEvent',{id}).then(()=>alert('Registered!'))),
+ A('Create Event','CLUB_HEAD',0,async()=>{const v=await form('New Event',[['title','Title'],['description','Description'],['date','Date & time','datetime-local'],['deadline','Registration deadline','datetime-local'],['capacity','Capacity','number']]);v&&await api('createEvent',v)}),
+ A('Approve','FACULTY,ADMIN',1,ST('events','APPROVED')),A('Reject','FACULTY,ADMIN',1,ST('events','REJECTED'))]},
+{id:'attend',n:'Attendance',roles:'CLUB_HEAD,FACULTY,ADMIN',b:[A('Mark Present','CLUB_HEAD,ADMIN',1,id=>api('attend',{id,v:1})),A('Mark Absent','CLUB_HEAD,ADMIN',1,id=>api('attend',{id,v:0}))]},
+{id:'certs',n:'My Certificates',roles:'STUDENT',b:[A('Open / Print Certificate','STUDENT',1,id=>window.open('api.php?cert='+id))]},
+{id:'budget',n:'Budget',roles:'CLUB_HEAD,FACULTY,ADMIN',b:[A('Add Entry','CLUB_HEAD',0,async()=>{const v=await form('Budget Entry',[['type','Type','select',['FUNDING','SPONSORSHIP','EXPENSE']],['amount','Amount','number'],['note','Note']]);v&&await api('addBudget',v)})]},
+{id:'ann',n:'Announcements',roles:'*',b:[A('Post Announcement','CLUB_HEAD',0,async()=>{const v=await form('Announcement',[['title','Title'],['body','Message']]);v&&await api('postAnn',v)})]},
+{id:'reports',n:'Reports',roles:'CLUB_HEAD,FACULTY,ADMIN',b:[]},
+{id:'users',n:'Users',roles:'ADMIN',b:[A('Set Role','ADMIN',1,async id=>{const v=await form('Set Role',[['role','Role','select',['STUDENT','CLUB_HEAD','FACULTY','ADMIN']]]);v&&await api('setRole',{id,...v})})]},
+{id:'db',n:'🗄 Data Viewer',roles:'ADMIN',b:[A('Delete Selected Row','ADMIN',1,id=>confirm('Delete row '+id+' permanently?')&&api('del',{table:$('#tsel').value,id}))]}];
+const ok=r=>r=='*'||r.split(',').includes(me.role);
+const tbl=rows=>!rows.length?'<p style="color:var(--m)">No data yet.</p>':`<table><thead><tr>${Object.keys(rows[0]).map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr data-id="${esc(Object.values(r)[0])}" class="${Object.values(r)[0]==selId?'sel':''}">${Object.entries(r).map(([k,v])=>`<td>${['status'].includes(k)||/^(APPROVED|REJECTED|PENDING|PRESENT|ABSENT)$/.test(v)?`<span class="badge ${esc(v)}">${esc(v)}</span>`:esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+async function load(){if(!cur)return;const d=await api('list',{t:cur.id,table:$('#tsel')?.value});
+ $('#tbl').innerHTML=d.multi?Object.entries(d.multi).map(([k,v])=>`<h3>${k}</h3>${tbl(v)}`).join(''):tbl(d.rows);
+ document.querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>{selId=tr.dataset.id;document.querySelectorAll('tr.sel').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel')})}
+function show(t){cur=t;selId=null;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==t.id));
+ const tb=$('#tb');tb.innerHTML='';
+ if(t.id=='db'){tb.innerHTML='<select id="tsel" style="width:auto;margin:0"><option>users<option>clubs<option>memberships<option>events<option>registrations<option>budget<option>announcements</select>';$('#tsel').onchange=()=>{selId=null;run(load)()}}
+ t.b.filter(b=>ok(b.roles)).forEach(b=>{const e=document.createElement('button');e.textContent=b.l;if(b.l.startsWith('Create')||b.l.startsWith('Add')||b.l.startsWith('Post'))e.className='p';
+  e.onclick=run(async()=>{if(b.sel&&!selId)return alert('Click a row first');await b.fn(selId);await load()});tb.append(e)});
+ tb.insertAdjacentHTML('beforeend','<span class="live">● live – refreshes every 3s</span>');run(load)()}
+function enter(){$('#login').hidden=true;$('#app').hidden=false;$('#who').textContent=`${me.name} (${me.role})`;
+ $('#nav').innerHTML='';T.filter(t=>ok(t.roles)).forEach(t=>{const b=document.createElement('button');b.textContent=t.n;b.dataset.id=t.id;b.onclick=()=>show(t);$('#nav').append(b)});show(T[0])}
+const login=run(async()=>{me=(await api('login',{email:$('#em').value,password:$('#pw').value})).u;enter()});
+const reg=run(async()=>{const v=await form('Register (as Student)',[['name','Name'],['email','Email','email'],['password','Password','password'],['department','Department']]);if(v){await api('register',v);alert('Registered! Now log in.')}});
+const logout=run(async()=>{await api('logout');me=null;cur=null;$('#app').hidden=true;$('#login').hidden=false});
+setInterval(()=>{if(me&&!$('#dlg').open)load().catch(()=>{})},3000);
+api('me').then(r=>{me=r.u;me?enter():$('#login').hidden=false}).catch(e=>{document.body.innerHTML='<div class="card"><h3>Cannot reach the database</h3>Start <b>Apache</b> and <b>MySQL</b> in XAMPP and open <code>http://localhost/club/</code><br><br>'+esc(e.message)+'</div>'});
+</script></body></html>
